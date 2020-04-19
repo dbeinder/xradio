@@ -151,12 +151,16 @@ int xradio_hw_scan(struct ieee80211_hw *hw,
 	mutex_lock(&hw_priv->conf_mutex);
 
 	/* TODO by Icenowy: so strange function call */
-	frame.skb = ieee80211_probereq_get(hw, vif->addr, NULL, 0, 0);
+	frame.skb = ieee80211_probereq_get(hw, vif->addr, NULL, 0, req->ie_len);
 	if (!frame.skb) {
 		scan_printk(XRADIO_DBG_ERROR, "%s: ieee80211_probereq_get failed!\n", 
 		            __func__);
 		return -ENOMEM;
 	}
+
+	/* add info elements to probe frame (supported rates) */
+	if (req->ie_len)
+		memcpy(skb_put(frame.skb, req->ie_len), req->ie, req->ie_len);
 
 #ifdef ROAM_OFFLOAD
 	if (priv->join_status != XRADIO_JOIN_STATUS_STA) {
@@ -437,6 +441,9 @@ void xradio_scan_work(struct work_struct *work)
 
 	} else {
 		struct ieee80211_channel *first = *hw_priv->scan.curr;
+		bool passiveScan = first->flags & IEEE80211_CHAN_NO_IR;
+
+		//verify that all channels to be scanned are same band, active/passive & power
 		for (it = hw_priv->scan.curr + 1, i = 1;
 		     it != hw_priv->scan.end && i < WSM_SCAN_MAX_NUM_OF_CHANNELS;
 		     ++it, ++i) {
@@ -456,13 +463,13 @@ void xradio_scan_work(struct work_struct *work)
 			scan.maxTransmitRate = WSM_TRANSMIT_RATE_1;
 
 		/* TODO: Is it optimal? */
-		scan.numOfProbeRequests = (first->flags & IEEE80211_CHAN_NO_IR) ? 0 : 2;
+		scan.numOfProbeRequests = passiveScan ? 0 : 2;
 
 		scan.numOfSSIDs = hw_priv->scan.n_ssids;
 		scan.ssids = &hw_priv->scan.ssids[0];
 		scan.numOfChannels = it - hw_priv->scan.curr;
-		/* TODO: Is it optimal? */
-		scan.probeDelay = 100;
+		/* TODO: Is it optimal? increase to 200 copied from allwinner bsp 4.4 */
+		scan.probeDelay = 200;
 		/* It is not stated in WSM specification, however
 		 * FW team says that driver may not use FG scan
 		 * when joined. */
@@ -482,20 +489,19 @@ void xradio_scan_work(struct work_struct *work)
 		maxChannelTime = (maxChannelTime < 35) ? 35 : maxChannelTime;
 		for (i = 0; i < scan.numOfChannels; ++i) {
 			scan.ch[i].number = hw_priv->scan.curr[i]->hw_value;
-
-
-				if (hw_priv->scan.curr[i]->flags & IEEE80211_CHAN_NO_IR) {
-					scan.ch[i].minChannelTime = 50;
-					scan.ch[i].maxChannelTime = 110;
-				} else {
-					scan.ch[i].minChannelTime = 15;
-					scan.ch[i].maxChannelTime = maxChannelTime;
-				}
-
-
+			/* min: time to channel switch if no responses, 
+			*  max: time to listen if transmissions are heard */
+			if (passiveScan) {
+				/* typical AP send beacons with 100TU = 102.4ms interval */
+				scan.ch[i].minChannelTime = 110;
+				scan.ch[i].maxChannelTime = 120;
+			} else {
+				scan.ch[i].minChannelTime = 15;
+				scan.ch[i].maxChannelTime = maxChannelTime;
+			}
 		}
 
-			if (!(first->flags & IEEE80211_CHAN_NO_IR) &&
+			if (!passiveScan &&
 			    hw_priv->scan.output_power != first->max_power) {
 			    hw_priv->scan.output_power = first->max_power;
 				/* TODO:COMBO: Change after mac80211 implementation

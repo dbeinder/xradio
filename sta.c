@@ -1434,7 +1434,7 @@ void xradio_join_work(struct work_struct *work)
 	cancel_delayed_work_sync(&priv->join_timeout);
 
 	bss = cfg80211_get_bss(hw_priv->hw->wiphy, hw_priv->channel,
-			bssid, NULL, 0, 0, 0);
+			bssid, NULL, 0, IEEE80211_BSS_TYPE_ANY, IEEE80211_PRIVACY_ANY);
 	if (!bss) {
 		xradio_queue_remove(queue, hw_priv->pending_frame_id);
 		wsm_unlock_tx(hw_priv);

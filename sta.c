@@ -580,16 +580,10 @@ void xradio_set_beacon_wakeup_period_work(struct work_struct *work)
 	} else {
 		join_dtim_period_extend = priv->join_dtim_period;
 	}
-	WARN_ON(wsm_set_beacon_wakeup_period(priv->hw_priv,
-	         priv->beacon_int * join_dtim_period_extend >
-	         MAX_BEACON_SKIP_TIME_MS ? 1 : join_dtim_period_extend, 
-	         0, priv->if_id));
+	WARN_ON(wsm_set_beacon_wakeup_period(priv->hw_priv, join_dtim_period_extend, 0, priv->if_id));
 }
 #else
-	WARN_ON(wsm_set_beacon_wakeup_period(priv->hw_priv,
-	         priv->beacon_int * priv->join_dtim_period >
-	         MAX_BEACON_SKIP_TIME_MS ? 1 :priv->join_dtim_period, 
-	         0, priv->if_id));
+	WARN_ON(wsm_set_beacon_wakeup_period(priv->hw_priv, priv->join_dtim_period, 0, priv->if_id));
 #endif
 }
 

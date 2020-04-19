@@ -562,9 +562,7 @@ static int __xradio_wow_suspend(struct xradio_vif *priv,
 	if (priv->join_status == XRADIO_JOIN_STATUS_STA && 
 		  priv->join_dtim_period &&  !priv->has_multicast_subscription) {
 		state->beacon_skipping = true;
-		wsm_set_beacon_wakeup_period(hw_priv, priv->join_dtim_period,
-		                             XRADIO_BEACON_SKIPPING_MULTIPLIER * \
-		                             priv->join_dtim_period, priv->if_id);
+		wsm_set_beacon_wakeup_period(hw_priv, priv->join_dtim_period * XRADIO_BEACON_SKIPPING_MULTIPLIER, 0, priv->if_id);
 	}
 
 	ret = timer_pending(&priv->mcast_timeout);
@@ -697,13 +695,9 @@ static int __xradio_wow_resume(struct xradio_vif *priv)
 		} else {
 			join_dtim_period_extend = priv->join_dtim_period;
 		}
-		wsm_set_beacon_wakeup_period(hw_priv,
-			((priv->beacon_int * join_dtim_period_extend) > MAX_BEACON_SKIP_TIME_MS ?
-			 1 : join_dtim_period_extend) , 0, priv->if_id);
+		wsm_set_beacon_wakeup_period(hw_priv, join_dtim_period_extend, 0, priv->if_id);
 #else
-		wsm_set_beacon_wakeup_period(hw_priv, priv->beacon_int *
-			(priv->join_dtim_period > MAX_BEACON_SKIP_TIME_MS ? 1 : priv->join_dtim_period), 
-			0, priv->if_id);
+		wsm_set_beacon_wakeup_period(hw_priv, priv->join_dtim_period, 0, priv->if_id);
 #endif
 		state->beacon_skipping = false;
 	}

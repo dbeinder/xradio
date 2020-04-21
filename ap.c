@@ -408,42 +408,6 @@ void xradio_bss_info_changed(struct ieee80211_hw *dev,
 		if (wsm_set_arp_ipv4_filter(hw_priv, &filter, priv->if_id))
 			WARN_ON(1);
 
-		if (filter.enable &&
-			(priv->join_status == XRADIO_JOIN_STATUS_STA)) {
-			/* Firmware requires that value for this 1-byte field must
-			 * be specified in units of 500us. Values above the 128ms
-			 * threshold are not supported. */
-			//if (info->dynamic_ps_timeout >= 0x80)
-			//	priv->powersave_mode.fastPsmIdlePeriod = 0xFF;
-			//else
-			//	priv->powersave_mode.fastPsmIdlePeriod = info->dynamic_ps_timeout << 1;
-
-			priv->powersave_mode.fastPsmIdlePeriod = 200;//when connected,the dev->conf.dynamic_ps_timeout value is 0
-			priv->powersave_mode.apPsmChangePeriod = 200; //100ms, add by yangfh
-			ap_printk(XRADIO_DBG_NIY, "[STA]fastPsmIdle=%d, apPsmChange=%d\n", 
-			          priv->powersave_mode.fastPsmIdlePeriod, 
-			          priv->powersave_mode.apPsmChangePeriod);
-
-			if (priv->setbssparams_done) {
-				int ret = 0;
-				struct wsm_set_pm pm = priv->powersave_mode;
-				if (priv->user_power_set_true)
-					priv->powersave_mode.pmMode = priv->user_pm_mode;
-				else if ((priv->power_set_true &&
-				         ((priv->powersave_mode.pmMode == WSM_PSM_ACTIVE) ||
-				         (priv->powersave_mode.pmMode == WSM_PSM_PS)))    ||
-				         !priv->power_set_true)
-					priv->powersave_mode.pmMode = WSM_PSM_FAST_PS;
-
-				ret = xradio_set_pm (priv, &priv->powersave_mode);
-				if(ret)
-					priv->powersave_mode = pm;
-			} else {
-				priv->powersave_mode.pmMode = WSM_PSM_FAST_PS;
-			}
-			priv->power_set_true = 0;
-			priv->user_power_set_true = 0;
-		}
 	}
 
 	if (changed & BSS_CHANGED_BEACON) {
@@ -625,10 +589,7 @@ void xradio_bss_info_changed(struct ieee80211_hw *dev,
 				                                  hw_priv->ba_tid_mask, priv->if_id));
 				wsm_unlock_tx(hw_priv);
 			}
-			/*set ps active,avoid that when connecting process,the device sleeps,then can't receive pkts.*/
-			if (changed & BSS_CHANGED_ASSOC) 
-				priv->powersave_mode.pmMode = WSM_PSM_ACTIVE;
-			xradio_set_pm(priv, &priv->powersave_mode);
+			
 			if (priv->vif->p2p) {
 				ap_printk(XRADIO_DBG_NIY, "[STA] Setting p2p powersave configuration.\n");
 				WARN_ON(wsm_set_p2p_ps_modeinfo(hw_priv, &priv->p2p_ps_modeinfo, priv->if_id));
@@ -743,20 +704,14 @@ void xradio_bss_info_changed(struct ieee80211_hw *dev,
 		//}
 #endif /* CONFIG_XRADIO_USE_EXTENSIONS */
 	}
-	/*
-	 * in linux3.4 mac,the  enum ieee80211_bss_change variable doesn't have
-	 * BSS_CHANGED_PS and BSS_CHANGED_RETRY_LIMITS enum value.
-	 */
-#if 0
-	if (changed & BSS_CHANGED_PS) {
-		if (info->ps_enabled == false)
+
+	if (changed & (BSS_CHANGED_PS | BSS_CHANGED_ASSOC)) {
+		if (!info->ps)
 			priv->powersave_mode.pmMode = WSM_PSM_ACTIVE;
-		else if (info->dynamic_ps_timeout <= 0)
-			priv->powersave_mode.pmMode = WSM_PSM_PS;
 		else
 			priv->powersave_mode.pmMode = WSM_PSM_FAST_PS;
-
-		ap_printk(XRADIO_DBG_MSG, "[STA] Aid: %d, Joined: %s, Powersave: %s\n",
+		
+		ap_printk(XRADIO_DBG_MSG, "[PowerSave] aid: %d, IsSTA: %s, Powersave: %s\n",
 		          priv->bss_params.aid,
 		          priv->join_status == XRADIO_JOIN_STATUS_STA ? "yes" : "no",
 		         (priv->powersave_mode.pmMode == WSM_PSM_ACTIVE ? "WSM_PSM_ACTIVE" :
@@ -767,21 +722,21 @@ void xradio_bss_info_changed(struct ieee80211_hw *dev,
 		/* Firmware requires that value for this 1-byte field must
 		 * be specified in units of 500us. Values above the 128ms
 		 * threshold are not supported. */
-		if (info->dynamic_ps_timeout >= 0x80)
+		priv->powersave_mode.apPsmChangePeriod = 200;
+		priv->powersave_mode.minAutoPsPollPeriod = 0;
+
+		if (dev->conf.dynamic_ps_timeout >= 0x80)
 			priv->powersave_mode.fastPsmIdlePeriod = 0xFF;
 		else
-			priv->powersave_mode.fastPsmIdlePeriod = info->dynamic_ps_timeout << 1;
-		ap_printk(XRADIO_DBG_NIY, "[STA]CHANGED_PS fastPsmIdle=%d, apPsmChange=%d\n", 
+			priv->powersave_mode.fastPsmIdlePeriod = dev->conf.dynamic_ps_timeout << 1;
+
+		ap_printk(XRADIO_DBG_NIY, "CHANGED_PS fastPsmIdle=%d, apPsmChange=%d\n", 
 		          priv->powersave_mode.fastPsmIdlePeriod, 
 		          priv->powersave_mode.apPsmChangePeriod);
 
-		if (priv->join_status == XRADIO_JOIN_STATUS_STA && priv->bss_params.aid &&
-			  priv->setbssparams_done && priv->filter4.enable)
-			xradio_set_pm(priv, &priv->powersave_mode);
-		else
-			priv->power_set_true = 1;
+		xradio_set_pm(priv, &priv->powersave_mode);
 	}
-
+#if 0
 	if (changed & BSS_CHANGED_RETRY_LIMITS) {
 		ap_printk(XRADIO_DBG_NIY, "Retry limits: %d (long), %d (short).\n", 
 		          info->retry_long, info->retry_short);

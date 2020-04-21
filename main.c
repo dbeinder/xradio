@@ -291,7 +291,8 @@ struct ieee80211_hw *xradio_init_common(size_t hw_priv_data_len)
 	hw->wiphy->flags |= WIPHY_FLAG_AP_UAPSD;
 #endif /* CONFIG_XRADIO_USE_EXTENSIONS */
 	/* fix the problem that driver can not set pro-resp template frame to fw */
-	hw->wiphy->flags |= WIPHY_FLAG_AP_PROBE_RESP_OFFLOAD;
+	hw->wiphy->flags |= WIPHY_FLAG_AP_PROBE_RESP_OFFLOAD |
+						WIPHY_FLAG_PS_ON_BY_DEFAULT;
 
 #if defined(CONFIG_XRADIO_DISABLE_BEACON_HINTS)
 	hw->wiphy->flags |= WIPHY_FLAG_DISABLE_BEACON_HINTS;
